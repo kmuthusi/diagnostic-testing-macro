@@ -1,4 +1,4 @@
-# `%diag_test`: A SAS macro for evaluating diagnostic accuracy measures from multiple diagnostic tests
+# `%diag_test`: A generic SAS macro for evaluating diagnostic accuracy measures from multiple diagnostic tests
 This repository was created for use by CDC programs to collaborate on public health surveillance related projects in support of the CDC Surveillance Strategy.  Github is not hosted by the CDC, but is used by CDC and its partners to share information and collaborate on software.
 
 ## Macro description
