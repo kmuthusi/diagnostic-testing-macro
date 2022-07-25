@@ -35,7 +35,7 @@ The user should specify input parameters described in the table below unless the
 |decimalpoints	|number of decimal places for each estimated measure|
 |alpha		|(optional) desired level of significance (default=0.05, for 95% confidence intervals)|
 |missvaluelabel	|(optional) value label for missing values. If missing data have a format, it should be provided, otherwise macro assumes the default format “.”|
-|varmethod  |(optional) method for computing confidence intervals namely "Normal" (default) for normal approximation or "Wilson" for Wilson-score or "Exact" for exact-binomial approximation|
+|varmethod  |(optional) method for computing confidence intervals namely "Normal" (default) for normal distribution or "Wilson" (most desired) for Wilson score or "Exact" for exact binomial approximations|
 |print	|variable for displaying/suppressing the output table on the output window which takes the values (NO=suppress output, YES=show output)|
 
 
