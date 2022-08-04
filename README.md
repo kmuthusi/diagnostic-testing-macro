@@ -2,7 +2,7 @@
 This repository was created for use by CDC programs to collaborate on public health surveillance related projects in support of the CDC Surveillance Strategy.  Github is not hosted by the CDC, but is used by CDC and its partners to share information and collaborate on software.
 
 ## Macro description
-`%diag_test` is a SAS macro for evaluating diagnostic accuracy measures from multiple diagnostic and screening tests. It uses patient-level data and generates a 2x2 contingency table as part of the output.
+`%diag_test` is a SAS macro for evaluating diagnostic accuracy measures from multiple diagnostic and screening tests. It uses patient-level data and generates a 2x2 contingency table as part of the output. It also creates an additional output of overlayed ROC curves with corresponding AUCs for comparison.
 
 The macro computes a point estimate for each measure of diagnostic accuracy using formulae provided in Table 2 and corresponding Wilson score binomial confidence limits (unless specified otherwise). It consists of one sub-macro which computes estimates for each diagnostic tests then combines analysis for all of them into one output table. The output is then processed using the TEMPLATE, PROC REPORT procedures and the output delivery system (ODS) to create a publication- quality table. The macro has been developed to run on windows platform and might require appropriate adjustments to run on other operating systems platforms.
 
