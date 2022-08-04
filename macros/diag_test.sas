@@ -3,7 +3,7 @@
 ** FILENAME     : diag_test.sas                                         **
 **                                                                      **
 ** DESCRIPTION	: Calculates diagnostic accuracy measures i.e.,			**
-** 				sensitivity, spececificity, positive predictive 			**
+** 				sensitivity, spececificity, positive predictive 		**
 ** 				values (PPN), negative predictive values (NPV), 		**
 ** 				positive likelihood ratio (LR+), negative likelihood  	**
 ** 				ratio (LR-), diagnostic accuracy, disease,				**
@@ -61,6 +61,7 @@
 					decimalpoints=,
 					alpha=0.05,
 					missvaluelabel=.,
+					varmethod=,
 				 	print=);
 
 %* validation for input parameters;
@@ -110,7 +111,7 @@
 %end;
 
 %if %length(&surveyname) eq 0 %then %do;
-	%put ERROR: Please provide survey name abbreviation, surveyname=;
+	%let surveyname=SURVEY;
 %runquit;
 %end;
 
@@ -242,6 +243,27 @@ title;
 ods tagsets.excelxp close;
 ods rtf close;
 
+ods _all_ close;
+ods rtf file="&outputdir\roc_&tablename..rtf" startpage=yes;
+ods noproctitle;
+
+	title "ROC Curves for " "&tabletitle" " (&surveyname study)";
+		proc logistic data=dprepare;
+			model truthvarcat(event="1") = &testvarlist / nofit;
+			where truthvarcat in (1,2);
+			ods select ROCOverlay;
+			%do _i=1 %to &nvars;
+				%let testvar = %scan(&testvarlist, &_i);
+				*%let tvarlab = call symputx("testvarlab", vlabel(&testvar));
+					*% roc '&testvar' &testvar.;
+					roc &testvar.;
+			%end;
+		run;
+		quit;
+	title;
+ods rtf close;
+ods listing;
+
 ods exclude none;
 
 quit;
@@ -319,152 +341,376 @@ data _tmp3_;
 	 		measrgree="Sensitivity (%)";
 			test_r=">=&testcutvalue"; 
 			testtype="&testtype";
-			sens=a/(a+c);
-			n=a+c;
+			sens=a/m1;
+			n=m1;
 
-			%* confidence intervals;
-			%* upper limit;    
-			sens_ucl=(sens + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((sens*(1-sens)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
+			if upcase(&varmethod) = WILSON then do; 
+				* Wilson score;
+				* upper limit;    
+				sens_ucl=(sens + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((sens*(1-sens)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
 
-			%* lower limit;    
-			sens_lcl=(sens + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((sens*(1-sens)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+				* lower limit;    
+				sens_lcl=(sens + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((sens*(1-sens)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+			end;
 
-			%* interval;
+			else if upcase(&varmethod) = EXACT then do;
+				* exact binomial confidence limits ***equn 10.7 of feller;
+				lpct=(1.0-95.0/100)/2;    
+				upct=1-lpct;  
+
+				* upper limit;    
+				if a<m1 then sens_ucl=1-betainv(lpct,c,a+1); 
+				else sens_ucl=1;
+
+				* lower limit;    
+				if a>0 then sens_lcl=1-betainv(upct,c+1,a);     
+				else sens_lcl=0;
+			end;
+
+			else do;
+				* standard normal error;
+				sens_se=sqrt(sens*(1-sens)/n);
+
+				* upper limit;    
+				sens_ucl=sens+(1.96*sens_se); 
+
+				* lower limit;    
+				sens_lcl=sens-(1.96*sens_se); 
+			end;
+
+			* 95 CI;
 			stat=put(100*sens,f5.&decimalpoints.)||" ("||trim(left(put(100*sens_lcl,5.&decimalpoints.)))||" - "||trim(left(put(100*sens_ucl,5.&decimalpoints.)))||")";
 			cnt1 = put(a,f4.0);
 			cnt2 = put(b,f4.0);
-			tot  = put(a + b,f4.0);
+			tot  = put(n1,f4.0);
 		end;
+
 		if i=2 then do;
 	 		measrgree="Specificity (%)";
 			test_r="";
-			spec=d/(b+d);
-			n=b+d;
+			spec=d/m2;
+			n=m2;
 
-			%* confidence intervals;
-			%* upper limit;    
-			spec_ucl=(spec + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((spec*(1-spec)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
+			if upcase(&varmethod) = WILSON then do; 
+				* confidence intervals;
+				* upper limit;    
+				spec_ucl=(spec + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((spec*(1-spec)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
 
-			%* lower limit;    
-			spec_lcl=(spec + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((spec*(1-spec)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+				* lower limit;    
+				spec_lcl=(spec + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((spec*(1-spec)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+			end;
 
-			%* interval;
+			else if upcase(&varmethod) = EXACT then do; 
+				*** exact binomial confidence limits ***equn 10.7 of feller*;
+				lpct=(1.0-95.0/100)/2;    
+				upct=1-lpct;    
+
+				* upper limit;
+				if d<m2 then spec_ucl=1-betainv(lpct,b,d+1); 
+				else spec_ucl=1;
+
+				* lower limit;
+				if d>0 then spec_lcl=1-betainv(upct,b+1,d);     
+				else spec_lcl=0;
+			end;
+
+			else do; 
+				* standard error;
+				spec_se=sqrt(spec*(1-spec)/n);
+
+				* upper limit;    
+				spec_ucl=spec+(1.96*spec_se); 
+
+				* lower limit;    
+				spec_lcl=spec-(1.96*spec_se); 
+			end;
+
+			* 95 CI;
 			stat=put(100*spec,f5.&decimalpoints.)||" ("||trim(left(put(100*spec_lcl,5.&decimalpoints.)))||" - "||trim(left(put(100*spec_ucl,5.&decimalpoints.)))||")";
 			cnt1 = "";
 			cnt2 = "";
 			tot  = "";
 		end;
+
 		if i=3 then do;
 	 		measrgree="Positive Predictive Value (PPV) (%)";
 			test_r="<&testcutvalue"; 
-			ppv=a/(a+b);
-			n=a+b;
+			ppv=a/n1;
+			n=n1;
 
-			%* confidence intervals;
-			%* upper limit;    
-			ppv_ucl=(ppv + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((ppv*(1-ppv)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
+			if upcase(&varmethod) = WILSON then do; 
+				* confidence intervals;
+				* upper limit;    
+				ppv_ucl=(ppv + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((ppv*(1-ppv)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
 
-			%* lower limit;    
-			ppv_lcl=(ppv + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((ppv*(1-ppv)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+				* lower limit;    
+				ppv_lcl=(ppv + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((ppv*(1-ppv)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+			end;
 
-			%* interval;
+			else if upcase(&varmethod) = EXACT then do;
+				lpct=(1.0-95.0/100)/2;    
+				upct=1-lpct;   
+
+				*** exact binomial confidence limits ***equn 10.7 of feller*;
+				* upper limit;
+				if a<n1 then ppv_ucl=1-betainv(lpct,b,a+1);     
+				else ppv_ucl=1;
+
+				* lower limit;
+				if a>0 then ppv_lcl=1-betainv(upct,b+1,a);     
+				else ppv_lcl=0;
+			end;
+
+			else do; 
+				* standard error;
+				ppv_se=sqrt(ppv*(1-ppv)/n);
+
+				* upper limit;    
+				ppv_ucl=ppv+(1.96*ppv_se); 
+
+				* lower limit;    
+				ppv_lcl=ppv-(1.96*ppv_se); 
+			end;
+
+			* 95 CI;
 			stat=put(100*ppv,f5.&decimalpoints.)||" ("||trim(left(put(100*ppv_lcl,5.&decimalpoints.)))||" - "||trim(left(put(100*ppv_ucl,5.&decimalpoints.)))||")";
 			cnt1 = put(c,f4.0);
 			cnt2 = put(d,f4.0);
 			tot  = put(c + d,f4.0);
 		end;
+
 		if i=4 then do;
 	 		measrgree="Negative Predictive Value (NPV) (%)";
 	    	test_r="";
-	        npv=d/(c+d);
-			n=c+d;
+	        npv=d/n2;
+			n=n2;
 
-			%* 95% confidence intervals;
-			%* upper limit;    
-			npv_ucl=(npv + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((npv*(1-npv)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
+			if upcase(&varmethod) = WILSON then do; 
+				* 95 confidence intervals;
+				* upper limit;    
+				npv_ucl=(npv + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((npv*(1-npv)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
 
-			%* lower limit;    
-			npv_lcl=(npv + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((npv*(1-npv)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+				* lower limit;    
+				npv_lcl=(npv + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((npv*(1-npv)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+			end;
 
-			%* interval;
+			else if upcase(&varmethod) = NORMAL then do; 
+				* standard error;
+				npv_se=sqrt(npv*(1-npv)/n);
+
+				* upper limit;    
+				npv_ucl=npv+(1.96*npv_se); 
+
+				* lower limit;    
+				npv_lcl=npv-(1.96*npv_se); 
+			end;
+
+			else if upcase(&varmethod) = EXACT then do;
+				*** exact binomial confidence limits ***equn 10.7 of feller*;
+				lpct=(1.0-95.0/100)/2;
+				upct=1-lpct;   
+ 
+				* upper limit;
+				if d<n2 then npv_ucl=1-betainv(lpct,c,d+1); 
+				else npv_ucl=1;
+
+				* lower limit;
+				if d>0 then npv_lcl=1-betainv(upct,c+1,d);     
+				else npv_lcl=0;
+			end;
+
+			* 95 CI;
 			stat=put(100*npv,f5.&decimalpoints.)||" ("||trim(left(put(100*npv_lcl,5.&decimalpoints.)))||" - "||trim(left(put(100*npv_ucl,5.&decimalpoints.)))||")";
 			cnt1 = "";
 			cnt2 = "";
 			tot  = "";
 		end;
+
 		if i=5 then do;
 	 		measrgree="Upward Misclassification (%)";
 			test_r="Total"; 
 		  	spec=d/(b+d);
 			umiss=1-spec;
-			n=b+d;
+			n=m2;
 
-			%* 95% confidence intervals;
-			%* upper limit;    
-			umiss_ucl=(umiss + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((umiss*(1-umiss)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
+			if upcase(&varmethod) = WILSON then do; 
+				* 95 confidence intervals;
+				* upper limit;    
+				umiss_ucl=(umiss + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((umiss*(1-umiss)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
 
-			%* lower limit;    
-			umiss_lcl=(umiss + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((umiss*(1-umiss)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+				* lower limit;    
+				umiss_lcl=(umiss + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((umiss*(1-umiss)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+			end;
 
-			%* interval;
+			else if upcase(&varmethod) = EXACT then do;
+				*** exact binomial confidence limits ***equn 10.7 of feller*;
+				lpct=(1.0-95.0/100)/2;
+				upct=1-lpct; 
+ 
+				* lower limit;
+				if d<(b+d) then umiss_lcl=betainv(lpct,b,d+1); 
+				else umiss_lcl=0;
+
+				* upper limit;
+				if d>0 then umiss_ucl=betainv(upct,b+1,d);     
+				else umiss_ucl=1;
+			end;
+
+			else do; 
+				* standard error;
+				umiss_se=sqrt(umiss*(1-umiss)/n);
+
+				* upper limit;    
+				umiss_ucl=umiss+(1.96*umiss_se); 
+
+				* lower limit;    
+				umiss_lcl=umiss-(1.96*umiss_se); 
+			end;
+
+
+			* 95 CI;
 			stat=put(100*umiss,f5.&decimalpoints.)||" ("||trim(left(put(100*umiss_lcl,5.&decimalpoints.)))||" - "||trim(left(put(100*umiss_ucl,5.&decimalpoints.)))||")";
 			cnt1 = put(a + c,f4.0);
 			cnt2 = put(b + d,f4.0);
 			tot  = put(a + b + c + d,f4.0);
 		end;
+
 		if i=6 then do;
 	 		measrgree="Downward Misclassification (%)";
 			test_r="";
-		 	sens=a/(a+c);
+		 	sens=a/m1;
 			dmiss=1-sens;
-			n=a+c;
+			n=m1;
 
-			%* 95% confidence intervals;
-			%* upper limit;    
-			dmiss_ucl=(dmiss + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((dmiss*(1-dmiss)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
+			if upcase(&varmethod) = WILSON then do; 
+				* 95 confidence intervals;
+				* upper limit;    
+				dmiss_ucl=(dmiss + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((dmiss*(1-dmiss)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
 
-			%* lower limit;    
-			dmiss_lcl=(dmiss + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((dmiss*(1-dmiss)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+				* lower limit;    
+				dmiss_lcl=(dmiss + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((dmiss*(1-dmiss)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+			end;
 
-			%* interval;
+			else if upcase(&varmethod) = EXACT then do;
+				*** exact binomial confidence limits ***equn 10.7 of feller*;
+				lpct=(1.0-95.0/100)/2;    
+				upct=1-lpct;  
+
+				*lower limit;    
+				if a<m1 then dmiss_lcl=betainv(lpct,c,a+1); 
+				else dmiss_lcl=0;
+
+				* upper limit;    
+				if a>0 then dmiss_ucl=betainv(upct,c+1,a);     
+				else dmiss_ucl=1;
+			end;
+			else do; 
+				* standard error;
+				dmiss_se=sqrt(dmiss*(1-dmiss)/n);
+
+				* upper limit;    
+				dmiss_ucl=dmiss+(1.96*dmiss_se); 
+
+				* lower limit;    
+				dmiss_lcl=dmiss-(1.96*dmiss_se); 
+			end;
+
+			* 95 CI;
 			stat=put(100*dmiss,f5.&decimalpoints.)||" ("||trim(left(put(100*dmiss_lcl,5.&decimalpoints.)))||" - "||trim(left(put(100*dmiss_ucl,5.&decimalpoints.)))||")";
 			cnt1 = "";
 			cnt2 = "";
 			tot  = "";
 		end;
+
 		if i=7 then do;
 	 		measrgree="False Omission Rate (FOR) (%)";
 			test_r=""; 
-		  	npv=d/(c+d);
+		  	npv=d/n2;
 			fo_rate=1-npv;
-			n=c+d;
+			n=n2;
 
-			%* upper limit;    
-			fo_rate_ucl=(fo_rate + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((fo_rate*(1-fo_rate)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
+			if upcase(&varmethod) = WILSON then do; 
+				* upper limit;    
+				fo_rate_ucl=(fo_rate + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((fo_rate*(1-fo_rate)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
 
-			%* lower limit;    
-			fo_rate_lcl=(fo_rate + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((fo_rate*(1-fo_rate)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+				* lower limit;    
+				fo_rate_lcl=(fo_rate + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((fo_rate*(1-fo_rate)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
 
-			%* interval;
+			end;
+
+			else if upcase(&varmethod) = EXACT then do;
+				*** exact binomial confidence limits ***equn 10.7 of feller*;
+				lpct=(1.0-95.0/100)/2;    
+				upct=1-lpct;  
+
+				*lower limit;    
+				if a<m1 then fo_rate_lcl=betainv(lpct,c,d+1); 
+				else fo_rate_lcl=0;
+
+				* upper limit;    
+				if a>0 then fo_rate_ucl=betainv(upct,c+1,d);     
+				else fo_rate_ucl=1;
+			end;
+
+			else do; 
+				* standard error;
+				fo_rate_se=sqrt(fo_rate*(1-fo_rate)/n2);
+
+				* upper limit;    
+				fo_rate_ucl=fo_rate+(1.96*fo_rate_se); 
+
+				* lower limit;    
+				fo_rate_lcl=fo_rate-(1.96*fo_rate_se); 
+			end;
+
+			* 95 CI;
 			stat=put(100*fo_rate,f5.&decimalpoints.)||" ("||trim(left(put(100*fo_rate_lcl,5.&decimalpoints.)))||" - "||trim(left(put(100*fo_rate_ucl,5.&decimalpoints.)))||")";
 			cnt1 = "";
 			cnt2 = "";
 			tot  = "";
 		end;
+
 		if i=8 then do;
 	 		measrgree="False Discovery Rate (FDR) (%)";
 			test_r="";
-		 	ppv=a/(a+b);
+		 	ppv=a/n1;
 			fd_rate=1-ppv;
-			n=a+b;
+			n=n1;
 
-			%* upper limit;    
-			fd_rate_ucl=(fd_rate + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((fd_rate*(1-fd_rate)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
+			if upcase(&varmethod) = WILSON then do; 
+				* upper limit;    
+				fd_rate_ucl=(fd_rate + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((fd_rate*(1-fd_rate)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
 
-			%* lower limit;    
-			fd_rate_lcl=(fd_rate + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((fd_rate*(1-fd_rate)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+				* lower limit;    
+				fd_rate_lcl=(fd_rate + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((fd_rate*(1-fd_rate)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+			end;
 
-			%* interval;
+			else if upcase(&varmethod) = EXACT then do;
+				*** exact binomial confidence limits ***equn 10.7 of feller*;
+				lpct=(1.0-95.0/100)/2;    
+				upct=1-lpct;  
+
+				*lower limit;    
+				if a<n1 then fd_rate_lcl=betainv(lpct,b,a+1); 
+				else fd_rate_lcl=0;
+
+				* upper limit;    
+				if a>0 then fd_rate_ucl=betainv(upct,b+1,a);     
+				else fd_rate_ucl=1;
+			end;
+
+			else do; 
+				* standard error;
+				fd_rate_se=sqrt(fd_rate*(1-fd_rate)/n2);
+
+				* upper limit;    
+				fd_rate_ucl=fd_rate+(1.96*fd_rate_se); 
+
+				* lower limit;    
+				fd_rate_lcl=fd_rate-(1.96*fd_rate_se); 
+			end;
+
+			* 95% CI;
 			stat=put(100*fd_rate,f5.&decimalpoints.)||" ("||trim(left(put(100*fd_rate_lcl,5.&decimalpoints.)))||" - "||trim(left(put(100*fd_rate_ucl,5.&decimalpoints.)))||")";
 			cnt1 = "";
 			cnt2 = "";
@@ -477,24 +723,24 @@ data _tmp3_;
 			spec=d/(b+d);
 	        lr_pos=sens/(1-spec);
 
-			%if (a != 0 & b != 0) %then %do;
-				%* standard error;
+			if (a ne 0 & b ne 0) then do;
+				* standard error;
 				lr_pos_var=(1/a)-(1/m1)+(1/b)-(1/m2);
 
-				%* upper limit;    
+				* upper limit;    
 				lr_pos_ucl=lr_pos*exp(quantile('NORMAL', (1-&alpha/2))*sqrt(lr_pos_var)); 
 
-				%* lower limit;    
+				* lower limit;    
 				lr_pos_lcl=lr_pos*exp(-quantile('NORMAL', (1-&alpha/2))*sqrt(lr_pos_var)); 
 
-			%end;
+			end;
 
-			%else %if (a = 0 & b = 0) %then %do;
+			else if (a = 0 & b = 0) then do;
 			    lr_pos_lcl = 0;
 			    lr_pos_ucl = Inf;
-			%end;
+			end;
 
-			%else %if (a = 0 & b != 0) %then %do;
+			else if (a = 0 & b ne 0) then do;
 			    a_temp = (1/2);
 			    spec_temp = d/(b+d);
 			    sens_temp = a_temp/(a+c);
@@ -502,8 +748,8 @@ data _tmp3_;
 			    lr_pos_lcl = 0;
 			    lr_pos_var =(1/a_temp)-(1/(a_temp+c))+(1/b)-(1/(b+d));
 			    lr_pos_ucl = lr_pos_temp*exp(quantile('NORMAL', (1-&alpha/2))*sqrt(lr_pos_var));
-			%end;
-			%else %if (a != 0 & b = 0) %then %do;
+			end;
+			else if (a ne 0 & b = 0) then do;
 			    b_temp = (1/2);
 			    spec_temp = d/(b_temp+d);
 			    sens_temp = a/(a+c);
@@ -511,8 +757,8 @@ data _tmp3_;
 			    lr_pos_var = (1/a) - (1/(a+c)) + (1/b_temp) - (1/(b_temp+d));
 			    lr_pos_lcl = lr_pos_temp*exp(-quantile('NORMAL', (1-&alpha/2))*sqrt(lr_pos_var));
 			    lr_pos_ucl = Inf;
-			%end;
-			%else %do;
+			end;
+			else do;
 			    a_temp = a - (1/2);
 			    b_temp = b - (1/2);
 
@@ -522,9 +768,9 @@ data _tmp3_;
 			    lr_pos_var = (1/a_temp) - (1/(a_temp+c)) + (1/b_temp) - (1/(b_temp+d));
 			    lr_pos_lcl = lr_pos_temp*exp(-quantile('NORMAL', (1-&alpha/2))*sqrt(lr_pos_var));
 			    lr_pos_ucl = lr_pos_temp*exp(quantile('NORMAL', (1-&alpha/2))*sqrt(lr_pos_var)); 
-			%end;
+			end;
 
-			%* interval;
+			* interval;
 			stat=put(lr_pos,f5.&decimalpoints.)||" ("||trim(left(put(lr_pos_lcl,5.&decimalpoints.)))||" - "||trim(left(put(lr_pos_ucl,5.&decimalpoints.)))||")";
 			cnt1 = "";
 			cnt2 = "";
@@ -537,22 +783,22 @@ data _tmp3_;
 			spec=d/(b+d);
 	        lr_neg=(1-sens)/spec;
 
-			%if ( c != 0 & d != 0 ) %then %do;
-				%* standard error;
+			if ( c ne 0 & d ne 0 ) then do;
+				* standard error;
 				lr_neg_var=(1/c)-(1/m1)+(1/d)-(1/m2);
 
-				%* upper limit;    
-				lr_neg_ucl=lr.neg*exp(quantile('NORMAL', (1-&alpha/2))*sqrt(lr_neg_var)); 
+				* upper limit;    
+				lr_neg_ucl=lr_neg*exp(quantile('NORMAL', (1-&alpha/2))*sqrt(lr_neg_var)); 
 
-				%* lower limit;    
+				* lower limit;    
 				lr_neg_lcl=lr_neg*exp(-quantile('NORMAL', (1-&alpha/2))*sqrt(lr_neg_var)); 
-			%end;
-			%else %if (c = 0 & d = 0) %then %do;
+			end;
+			else if (c = 0 & d = 0) then do;
 				lr_neg_lcl = 0;
    				lr_neg_ucl = Inf;
-			%end;
+			end;
 
-			%else %if (c = 0 & d != 0) %then %do;
+			else if (c = 0 & d ne 0) then do;
 				c_temp = (1/2);
 			    spec_temp = d/(b+d);
 			    sens_temp = a/(a+c_temp);
@@ -560,9 +806,9 @@ data _tmp3_;
 			    lr_neg_lcl = 0;
 			    lr_neg_var = (1/c_temp) - (1/(a+c)) + (1/d) - (1/(b+d));
 			    lr_neg_ucl = lr_neg_temp * exp(quantile('NORMAL', (1-&alpha/2))*sqrt(lr_neg_var));
-			%end;
+			end;
 
-			%else %if (c != 0 & d = 0) %then %do;
+			else if (c ne 0 & d = 0) then do;
 				d_temp = (1/2);
 			    spec_temp = d_temp/(b+d);
 			    sens_temp = a/(a+c);
@@ -570,9 +816,9 @@ data _tmp3_;
 			    lr_neg_var = (1/c) - (1/(a+c)) + (1/d_temp) - (1/(b+d));
 			    lr_neg_lcl = lr_neg_temp * exp(-quantile('NORMAL', (1-&alpha/2))*sqrt(lr_neg_var));
 			    lr_neg_ucl = Inf;
-			%end;
+			end;
 
-			%else %do;
+			else do;
 			    c_temp = c - (1/2);
 			    d_temp = d - (1/2);
 			    spec_temp = d_temp/(b+d);
@@ -581,65 +827,108 @@ data _tmp3_;
 			    lr_neg_var = (1/c_temp) - (1/(a+c)) + (1/d_temp) - (1/(b+d));
 			    lr_neg_lcl = lr_neg_temp * exp(-quantile('NORMAL', (1-&alpha/2))*sqrt(lr_neg_var));
 			    lr_neg_ucl = lr_neg_temp * exp(quantile('NORMAL', (1-&alpha/2))*sqrt(lr_neg_var));
-			%end;
+			end;
 
-			%* interval;
+			* interval;
 			stat=put(lr_neg,f5.&decimalpoints.)||" ("||trim(left(put(lr_neg_lcl,5.&decimalpoints.)))||" - "||trim(left(put(lr_neg_ucl,5.&decimalpoints.)))||")";
 			cnt1 = "";
 			cnt2 = "";
 			tot  = "";
 		end;
+
 		if i=11 then do;
 	 		measrgree="Diagnostic Accuracy (%)";
 			test_r="";
 			acc=(a+d)/(a+b+c+d);
 			n=a+b+c+d;
 
-			%* upper limit;    
-			acc_ucl=(acc + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((acc*(1-acc)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
+			if upcase(&varmethod) = WILSON then do; 
+				* upper limit;    
+				acc_ucl=(acc + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((acc*(1-acc)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
 
-			%* lower limit;    
-			acc_lcl=(acc + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((acc*(1-acc)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+				* lower limit;    
+				acc_lcl=(acc + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((acc*(1-acc)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+			end;
 
-			%* interval;
+			else do; 
+				* standard error;
+				acc_se=sqrt(acc*(1-acc)/n);
+
+				* upper limit;    
+				acc_ucl=acc+(1.96*acc_se); 
+
+				* lower limit;    
+				acc_lcl=acc-(1.96*acc_se); 
+			end;
+
+			* 95 CI;
 			stat=put(100*acc,f5.&decimalpoints.)||" ("||trim(left(put(100*acc_lcl,5.&decimalpoints.)))||" - "||trim(left(put(100*acc_ucl,5.&decimalpoints.)))||")";
 			cnt1 = "";
 			cnt2 = "";
 			tot  = "";
 		end;
+
 		if i=12 then do;
 	 		measrgree="Disease Prevalence (%)";
 			test_r="";
 			prev=(a+c)/(a+b+c+d);
 			n=a+b+c+d;
 
-			%* upper limit;    
-			prev_ucl=(prev + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((prev*(1-prev)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
+			if upcase(&varmethod) = WILSON then do; 
+				* upper limit;    
+				prev_ucl=(prev + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((prev*(1-prev)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
 
-			%* lower limit;    
-			prev_lcl=(prev + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((prev*(1-prev)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+				* lower limit;    
+				prev_lcl=(prev + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((prev*(1-prev)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+			end;
 
-			%* interval;
+			else if upcase(&varmethod) = EXACT then do;
+				*** exact binomial confidence limits ***equn 10.7 of feller*;
+				lpct=(1.0-95.0/100)/2;    
+				upct=1-lpct;
+ 
+				* upper limit;
+				if (a+c)<(a+b+c+d) then prev_ucl=1-betainv(lpct,(a+c),(b+d+1)); 
+				else prev_ucl=1;
+
+				* lower limit;
+				if d>0 then prev_lcl=1-betainv(upct,(a+c+1),(b+d));     
+				else prev_lcl=0;
+			end;
+
+			else do; 
+				* standard error;
+				prev_se=sqrt(prev*(1-prev)/n);
+
+				* upper limit;    
+				prev_ucl=prev+(1.96*prev_se); 
+
+				* lower limit;    
+				prev_lcl=prev-(1.96*prev_se); 
+			end;
+
+			* 95 CI;
 			stat=put(100*prev,f5.&decimalpoints.)||" ("||trim(left(put(100*prev_lcl,5.&decimalpoints.)))||" - "||trim(left(put(100*prev_ucl,5.&decimalpoints.)))||")";
 			cnt1 = "";
 			cnt2 = "";
 			tot  = "";
 		end;
+
 		if i=13 then do;
 	 		measrgree="Diagnostic Odds Ratio (DOR)";
 			test_r="";
 			dor=(a/c)/(b/d);
 
-			%* standard error;
+			* standard error;
 			dor_se=sqrt((1/a)+(1/b)+(1/c)+(1/d));
 
-			%* upper limit;    
+			* upper limit;    
 			dor_ucl=exp(log(dor)+(quantile('NORMAL', (1-&alpha/2))*dor_se)); 
 
-			%* lower limit;    
+			* lower limit;    
 			dor_lcl=exp(log(dor)-(quantile('NORMAL', (1-&alpha/2))*dor_se)); 
 
-			%* interval;
+			* 95 CI;
 			stat=put(dor,f5.&decimalpoints.)||" ("||trim(left(put(dor_lcl,5.&decimalpoints.)))||" - "||trim(left(put(dor_ucl,5.&decimalpoints.)))||")";
 			cnt1 = "";
 			cnt2 = "";
@@ -653,19 +942,19 @@ data _tmp3_;
 			bd=b;
 			n=a+b+c+d;
 
-			%* agreements;
+			* agreements;
 			po = (a+d)/n ;
 			pe = ((a+c)*(a+b)+(b+d)*(c+d))/n**2 ;
 			ppos = (2*a)/(n+a-d) ;
 			pneg = (2*d)/(n-a+d) ;
 
-	        %* the kappa statistic and its asymptotic standard error (fleiss, 2003);
+	        * the kappa statistic and its asymptotic standard error (fleiss, 2003);
 	       	kappa = (po-pe)/(1-pe) ;
 			q = ((a/n)*(1-(((a+b)/n)+((a+c)/n))*(1-kappa))**2)+((d/n)*(1-(((c+d)/n)+((b+d)/n))*(1-kappa))**2);
 			r = ((1-kappa)**2)*((b/n)*(((a+c)/n)+((c+d)/n))**2+(c/n)*(((b+d)/n)+((a+b)/n))**2) ;
 			s = (kappa - pe*(1-kappa))**2 ;
 
-			%* asymptotic standard error;
+			* asymptotic standard error;
 			se_kappa = sqrt((q+r-s)/(n*(1-pe)**2));
 			kappa_lcl = kappa-quantile('NORMAL', (1-&alpha/2))*se_kappa;
 			if kappa_lcl < -1.00 then kappa_lcl = -1.00;
@@ -673,7 +962,7 @@ data _tmp3_;
 			if kappa_ucl > 1 then kappa_ucl = 1.00;
 	        z = kappa/se_kappa;
 
-			%* interval;
+			* interval;
 			stat=put(kappa,f5.&decimalpoints.)||" ("||trim(left(put(kappa_lcl,5.&decimalpoints.)))||" - "||trim(left(put(kappa_ucl,5.&decimalpoints.)))||")";
 			cnt1 = "";
 			cnt2 = "";
@@ -687,37 +976,64 @@ data _tmp3_;
 			yo=sn+sp-1;
 			n=a+b+c+d;
 
-			%* upper limit;    
-			yo_ucl=(yo + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((yo*(1-yo)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
+			if upcase(&varmethod) = WILSON then do; 
+				* upper limit;    
+				yo_ucl=(yo + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((yo*(1-yo)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
 
-			%* lower limit;    
-			yo_lcl=(yo + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((yo*(1-yo)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+				* lower limit;    
+				yo_lcl=(yo + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((yo*(1-yo)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+			end;
 
+			else do; 
+				* standard error;
+				yo_se=sqrt(yo*(1-yo)/n);
 
-			%* interval;
+				* upper limit;    
+				yo_ucl=yo+(quantile('NORMAL', (1-&alpha/2))*yo_se); 
+
+				* lower limit;    
+				yo_lcl=yo-(quantile('NORMAL', (1-&alpha/2))*yo_se); 
+			end;
+
+			* 95 CI;
 			stat=put(yo,f5.&decimalpoints.)||" ("||trim(left(put(yo_lcl,5.&decimalpoints.)))||" - "||trim(left(put(yo_ucl,5.&decimalpoints.)))||")";
 			cnt1 = "";
 			cnt2 = "";
 			tot  = "";
 		end;
+
 		if i=16 then do;
 	 		measrgree="F-score";
 			test_r="";
 			f1_score=2*a / ((2*a)+b+c);
 			n=a+b+c+d;
 
-			%* upper limit;    
-			f1_score_ucl=(f1_score + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((f1_score*(1-f1_score)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
+			if upcase(&varmethod) = WILSON then do; 
+				* upper limit;    
+				f1_score_ucl=(f1_score + quantile('NORMAL', (1-&alpha/2))**2/(2*n) + quantile('NORMAL', (1-&alpha/2))*sqrt((f1_score*(1-f1_score)/n) + quantile('NORMAL', (1-&alpha/2))**2/(4*n**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/n); 
 
-			%* lower limit;    
-			f1_score_lcl=(f1_score + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((f1_score*(1-f1_score)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+				* lower limit;    
+				f1_score_lcl=(f1_score + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((f1_score*(1-f1_score)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
+			end;
 
-			%* interval;
+			else do; 
+				* standard error;
+				f1_score_se=sqrt(f1_score*(1-f1_score)/n);
+
+				* upper limit;    
+				f1_score_ucl=f1_score+(quantile('NORMAL', (1-&alpha/2))*f1_score_se); 
+
+				* lower limit;    
+				f1_score_lcl=f1_score-(quantile('NORMAL', (1-&alpha/2))*f1_score_se); 
+			end;
+
+			* 95 CI;
 			stat=put(f1_score,f5.&decimalpoints.)||" ("||trim(left(put(f1_score_lcl,5.&decimalpoints.)))||" - "||trim(left(put(f1_score_ucl,5.&decimalpoints.)))||")";
 			cnt1 = "";
 			cnt2 = "";
 			tot  = "";
 		end;
+
 		if i=17 then do; * do nothing - skip line;
 			measrgree="";
 			test_r="";
@@ -732,7 +1048,7 @@ data _tmp3_;
 			cnt2="< &truthcutvalue" 
 			test_r="Test result" 
 			tot="Total"  
-			Stat="%(95% CI)" 
+			stat="(95 CI)" 
 			testtype="Test type";   
  run;
 %mend dtest;
