@@ -3,12 +3,12 @@
 ** FILENAME     : diag_test.sas                                         **
 **                                                                      **
 ** DESCRIPTION	: Calculates diagnostic accuracy measures i.e.,			**
-** 				sensitivity, spececificity, positive predictive 		**
-** 				values (PPN), negative predictive values (NPV), 		**
-** 				positive likelihood ratio (LR+), negative likelihood  	**
-** 				ratio (LR-), diagnostic accuracy, disease,				**
-** 				prevalence and diagnostic odds ratio (DOR) and			**
-** 				prepares publication-quality output						**
+** 				  sensitivity, spececificity, positive predictive 		**
+** 				  values (PPN), negative predictive values (NPV), 		**
+** 				  positive likelihood ratio (LR+), negative likelihood  **
+** 				  ratio (LR-), diagnostic accuracy, disease,			**
+** 				  prevalence and diagnostic odds ratio (DOR) and		**
+** 				  prepares publication-quality output					**
 **                                                                      **
 ** AUTHOR       : Jacques Muthusi                          				**
 **                                                                      **
@@ -21,22 +21,22 @@
 ** PLATFORM     : WINDOWS												**
 **																		**
 ** INPUT		: Any dataset with diagnostic and reference test 		**
-**				variables.												**
+**				  variables.											**
 **                                                                      **
 ** OUTPUT		: Publication-quality table diagnostic accuracy 		**
-** 				measures plus 2x2 contingency in MS Word and Excel.   	**
+** 				  measures plus 2x2 contingency in MS Word and Excel.   **
 **                                                                      **
 ** ASSUMPTIONS	: The analysis dataset is clean, analysis variables 	**
-** 				are well labelled, and values of variables have been	**
-**				converted into appropriate SAS formats before they		**
-**				can be input to the macro call.			      			**
+** 				  are well labelled, and values of variables have been	**
+**				  converted into appropriate SAS formats before they	**
+**				  can be input to the macro call.			      		**
 **												   						**
 ** PARAMETERS	: See Table 1 of main manuscript for more details	   	**
 **												   						**
 **************************************************************************
 **************************************************************************;
 
-%*  macro to do error check then stop SAS from continuing to process;
+%* macro to do error check then stop SAS from continuing to process;
 %* the rest of the submitted statements if error is present;
 
 %macro runquit;
@@ -46,23 +46,23 @@
 	%end;
 %mend runquit;
 
-%macro diag_test(	data=,
-					testvarlist=,
-					testcutvalue=, 
-					truthvar=,
-					truthcutvalue=,
-					domain=,
-					domainvalue=,
-					condition=,
-				 	tabletitle=,
-				 	tablename=,
-				 	surveyname=,
-				 	outputdir=,
-					decimalpoints=,
-					alpha=0.05,
-					missvaluelabel=.,
-					varmethod=,
-				 	print=);
+%macro diag_test(data=,
+				 testvarlist=,
+				 testcutvalue=, 
+				 truthvar=,
+				 truthcutvalue=,
+				 domain=,
+				 domainvalue=,
+				 condition=,
+				 tabletitle=,
+				 tablename=,
+				 surveyname=,
+				 outputdir=,
+				 decimalpoints=,
+				 alpha=0.05,
+				 missvaluelabel=.,
+				 varmethod=,
+				 print=);
 
 %* validation for input parameters;
 %if %length(&data) eq 0 %then %do;
@@ -133,6 +133,14 @@
 		set _null_;
 	run;
 
+	data _prcurve_; 
+		set _null_;
+	run;
+
+	data _roccurve_; 
+		set _null_;
+	run;
+
 %* over testvar list;
   	%do %while(&len < &nvars); 
 		%let len = %eval(&len + 1);
@@ -149,11 +157,28 @@
 %* create binary version of test variable based on test variable cutoff value;
 		data dprepare;
  			set &data;
+
   			testvarcat=2-1*(&testvar > &testcutvalue);
   			if &testvar=&missvaluelabel. then testvarcat=&missvaluelabel.;
 
   			truthvarcat=2-1*(&truthvar > &truthcutvalue);
  			if &truthvar=&missvaluelabel. then truthvarcat=&missvaluelabel.;
+
+				%if %length(&domain) eq 0 %then %do; 
+					domain_all=1;
+					%let domain=%str(domain_all);
+					%let domainvalue=1;
+				%end;
+
+			if &domain=&domainvalue;
+			&condition;
+
+			* replace missing values code with .;
+			array a(*) _numeric_;
+			do i=1 to dim(a);
+				if a(i) = &missvaluelabel. then a(i) =.;
+			end;
+			drop i;
 		run;
 
     	data _TMP3_; 
@@ -165,12 +190,38 @@
 				testtype=&testtype,
 				testcutvalue=&testcutvalue,
 				truthvar=truthvarcat,
-				truthcutvalue=&truthcutvalue,
-				domain=&domain,
-				domainvalue=&domainvalue);
+				truthcutvalue=&truthcutvalue);
 
  		data __out__;
  			set __out__ _TMP3_;
+ 		run;
+
+		data _pr_final; 
+			set _null_; 
+		run;
+		
+		%prauc( data=_tmp1_,
+				testvar=&testvar,
+				testvarcat=testvarcat,
+				testtype=&testtype,
+				truthvarcat=truthvarcat);
+
+ 		data _prcurve_;
+ 			set _prcurve_ _pr_final;
+ 		run;
+
+		data _roc_final; 
+			set _null_; 
+		run;
+		
+		%rocauc(data=_tmp1_,
+				testvar=&testvar,
+				testvarcat=testvarcat,
+				testtype=&testtype,
+				truthvarcat=truthvarcat);
+
+ 		data _roccurve_;
+ 			set _roccurve_ _roc_final;
  		run;
 
  		%put i = &xi len = &len nvar = &nvars variable= &testvar;
@@ -178,7 +229,7 @@
  	%end;
  
 %if %upcase(&print) = NO %then %do; ods exclude all; %end;
-%else  %do; ods exclude none; %end;
+%else %do; ods exclude none; %end;
 
 %* define report template;
 proc template;
@@ -223,19 +274,24 @@ data _null_;
 	call symput("nci",trim(left(ci)));
 run;
 
-%LET truthvarlabel = &truthvarlab;
+%let truthvarlabel = &truthvarlab;
 
-%* prepare output;;
-proc report data=__out__  headline spacing=1 split = "*" nowd;
+%* keep once instance of testtype;
+data __out__;
+set __out__;
+	if i ne 1 then testtype=" ";
+run;
+
+%* prepare output;
+proc report data=__out__ headline spacing=1 split = "*" nowd;
         column ("Diagnostic test(s)" testtype test_r) ("Reference test (&truthvarlabel)" cnt1 cnt2 tot) ("Diagnostic accuracy measures" measrgree stat);
-        define testtype / order descending width = 25 right "Test category" flow;
-		define test_r / display width = 10 right "Test result" flow;
-		define cnt1 / display width=10 center ">=&truthcutvalue" flow;
-		define cnt2 / display width=10 center "<&truthcutvalue" flow;
-        define tot / display width=10 center "Total" flow;
-		define measrgree / display width=30 right "Measure" flow;
-        define stat / display width=20 center "Estimate (&nci % CI)" flow;
-		break after testtype/skip ;
+        define testtype 	/ display width=25 right "Test category" flow;
+		define test_r 		/ display width=10 right "Test result" flow;
+		define cnt1 		/ display width=10 center ">=&truthcutvalue" flow;
+		define cnt2 		/ display width=10 center "<&truthcutvalue" flow;
+        define tot 			/ display width=10 center "Total" flow;
+		define measrgree 	/ display width=30 right "Measure" flow;
+        define stat 		/ display width=20 center "Estimate (&nci % CI)" flow;
 run;
 
 footnote;
@@ -244,30 +300,139 @@ ods tagsets.excelxp close;
 ods rtf close;
 
 ods _all_ close;
+
 ods rtf file="&outputdir\roc_&tablename..rtf" startpage=yes;
 ods noproctitle;
+	title "Area under ROC curves for " "&tabletitle" " (&surveyname study)";
+		proc sgplot data=_roccurve_;
+			series x =_1mspec_ y = _sensit_ / group=ROC;
+			yaxis values=(0 to 1 by 0.2);
+			xaxis values=(0 to 1 by 0.2);
+		run;
+		quit;
+	title;
+ods rtf close;
+ods _all_ close;
 
-	title "ROC Curves for " "&tabletitle" " (&surveyname study)";
-		proc logistic data=dprepare;
-			model truthvarcat(event="1") = &testvarlist / nofit;
-			where truthvarcat in (1,2);
-			ods select ROCOverlay;
-			%do _i=1 %to &nvars;
-				%let testvar = %scan(&testvarlist, &_i);
-				*%let tvarlab = call symputx("testvarlab", vlabel(&testvar));
-					*% roc '&testvar' &testvar.;
-					roc &testvar.;
-			%end;
+*options nodate nonumber orientation=portrait;
+ods rtf file="&outputdir\auprc_&tablename..rtf" startpage=yes;
+ods noproctitle;
+	title "Area under PR curves for " "&tabletitle" " (&surveyname study)";
+		proc sgplot data=_prcurve_;
+			series x = recall y = precision / group=auprc;   
+			yaxis values=(0 to 1 by 0.2); 
+			xaxis values=(0 to 1 by 0.2);
 		run;
 		quit;
 	title;
 ods rtf close;
 ods listing;
-
 ods exclude none;
-
 quit;
+
 %mend diag_test;
+
+%* a sub-macro for precision recall;
+%macro prauc(data=,
+			 testvar=,
+			 testvarcat=,
+			 testtype=,
+			 truthvarcat=,
+			 domain=,
+			 domainvalue=);
+
+%* take care of missing values;
+
+%* fit a logistic regression model;
+proc logistic data=&data;
+	model &truthvarcat (event="1")= &testvar / noint outroc=pr_performance;
+	output out = pr_estprob p= pred;
+run;
+
+%* Using the Trapezoidal integration rule;
+data _pr_;
+length test $50;
+set pr_performance;
+	precision = _POS_/(_POS_ + _FALPOS_);
+	recall = _POS_/(_POS_ + _FALNEG_);
+	F_stat = harmean(precision, recall);
+	test = "&testtype";
+run;
+
+proc sort data=_pr_;
+	by recall;
+run;
+
+%* calculate area under precision recall curve;
+ods output auprc=auprc;
+proc iml;
+	use _pr_;
+	read all var {recall} into sensitivity;
+	read all var {precision} into precision;
+	N = 2 : nrow(sensitivity);
+	tpr = sensitivity[N] - sensitivity[N-1];
+	prec = precision[N] + precision[N-1];
+	auprc = tpr`*prec/2;
+	print auprc;
+quit;
+
+%* prepare final output;
+data auprc;
+length test $50;
+set auprc (rename=(Col1=pr));
+	test = "&testtype";
+	auprc = trim(left(test))||' ('||trim(left(put(pr,comma10.3)))||')';
+proc sort; by test; run;
+
+data _pr_final;
+	merge _pr_ auprc;
+	label precision="Precision" recall="Recall" auprc="Area Under the PR Curve";
+	by test; 
+run;
+
+%mend prauc;
+
+%* a sub-macro for roc;
+%macro rocauc(data=,
+			  testvar=,
+			  testvarcat=,
+			  testtype=,
+			  truthvarcat=,
+			  domain=,
+			  domainvalue=);
+
+%* fit a logistic regression model;
+ods output ROCAssociation = ROCAssociation;
+proc logistic data= &data;
+	model &truthvarcat(event="1") = &testvar / outroc=roc_performance;
+	roc &testvar;
+run;
+
+%* calculate area under ROC curve;
+data _roc_;
+length test $50;
+set roc_performance;
+	test = "&testtype";
+	where _SOURCE_ = "Model";
+proc sort; by test;
+run;
+
+data aucroc;
+length test $50;
+set ROCAssociation;
+	test = "&testtype";
+	ROC = trim(left(test))||' ('||trim(left(put(Area,comma10.3)))||')';
+	where ROCModel = "Model";
+proc sort; by test; 
+run;
+
+data _roc_final;
+	merge _roc_ aucroc;
+	label ROC = "Area Under the ROC Curve";
+	by test; 
+run;
+
+%mend rocauc;
 
 %* a sub-macro to produce data of test and true results;
 %macro dtest(	data=,
@@ -275,21 +440,12 @@ quit;
 				testtype=,
 				testcutvalue=,
 				truthvar=,
-				truthcutvalue=,
-				domain=,
-				domainvalue=);
+				truthcutvalue=);
 
 %* take care of missing values;
 data _tmp1_; 
 	set &data; 
 	if &testvar ^in (1,2) or &truthvar ^in (1,2) then delete;
-	%if %length(&domain) eq 0 %then %do; 
-		domain_all=1;
-		%let domain=%str(domain_all);
-		%let domainvalue=1;
-	%end;
-	if &domain=&domainvalue;
-	&condition;
 run;
 
 data _tmp1_; 
