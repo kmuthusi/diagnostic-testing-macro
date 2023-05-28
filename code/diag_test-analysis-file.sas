@@ -36,22 +36,22 @@ option mlogic mprint symbolgen;
 %let tablename=table_abbott_plasma_vs_dbs;
 %let tabletitle=Table 1. Evaluation diagnostic accuracy of Abbott DBS and CAP/CTM Plasma and CAP/CTM V-DBS vs Abbott Plasma in Viral Load testing;
 
-%diag_test(	data				=vl_dbs,
-			truthvar			=Abbott_Plasma_VLoad,
-			truthcutvalue		=1000,
-			testvarlist			=&testvarlist.,
-			testcutvalue		=1000,
-			domain				=dom_all,
-			domainvalue			=1,
-			condition			=if Abbott_Plasma_Valid=1 and log_diff_abbott_roche < 0.7 and atleast_dbs=1,
-			tabletitle			=&tabletitle.,
-			tablename			=&tablename.,
-			surveyname			=VL DBS,
-			outputdir			=&outputdir.,
-			decimalpoints		=2,
-			alpha				=0.05,
-			missvaluelabel		=-100,
-			print				=YES);
+%diag_test(	data			=vl_dbs,
+		truthvar		=Abbott_Plasma_VLoad,
+		truthcutvalue		=1000,
+		testvarlist		=&testvarlist.,
+		testcutvalue		=1000,
+		domain			=dom_all,
+		domainvalue		=1,
+		condition		=if Abbott_Plasma_Valid=1 and log_diff_abbott_roche < 0.7 and atleast_dbs=1,
+		tabletitle		=&tabletitle.,
+		tablename		=&tablename.,
+		surveyname		=VL DBS,
+		outputdir		=&outputdir.,
+		decimalpoints		=2,
+		alpha			=0.05,
+		missvaluelabel		=-100,
+		print			=YES);
 
 * program end time;
 %put END TIME: %sysfunc(datetime(),datetime14.);
