@@ -1,8 +1,8 @@
-# `%diag_test`: A generic SAS macro for evaluating diagnostic accuracy measures from multiple diagnostic tests
+# `%diag_test`: A Generic SAS Macro for Evaluating Diagnostic Accuracy Measures for Multiple Diagnostic Tests
 This repository was created for use by CDC programs to collaborate on public health surveillance related projects in support of the CDC Surveillance Strategy.  Github is not hosted by the CDC, but is used by CDC and its partners to share information and collaborate on software.
 
 ## Macro description
-`%diag_test` is a SAS macro for evaluating diagnostic accuracy measures from multiple diagnostic and screening tests. It uses patient-level data and generates a 2x2 contingency table as part of the output. It also creates an additional output of overlayed ROC curves with corresponding AUCs for comparison.
+`%diag_test` is a SAS macro for evaluating diagnostic accuracy measures from multiple diagnostic and screening tests. It uses patient-level data and generates a 2x2 contingency table and confusion matrix as part of the output. It also creates an additional output of overlayed ROC curves with corresponding AUCs for comparison.
 
 The macro computes a point estimate for each measure of diagnostic accuracy using formulae provided in Table 2 and corresponding Wilson score binomial confidence limits (unless specified otherwise). It consists of one sub-macro which computes estimates for each diagnostic tests then combines analysis for all of them into one output table. The output is then processed using the TEMPLATE, PROC REPORT procedures and the output delivery system (ODS) to create a publication- quality table. The macro has been developed to run on windows platform and might require appropriate adjustments to run on other operating systems platforms.
 
@@ -10,8 +10,9 @@ In summary, the macro has been design to provide the user with the following ben
 
 - Automated to shorten analysis time and eliminate error that arise during copy-pasting of analysis output.
 - Promote principles of reproducible research i.e., transparency, reproducibility, reusability.
-- Flexible to use by allowing user to just specify the dataset, truth and test variables and corresponding cut-offs.
-- Generic to use data from different settings.
+- Easy to use since user just needs to specify the dataset, truth and test variables and corresponding cut-offs.
+- Generic to use data from different settings e.g., in lab to evaluate multiple diagnostic tests or in machine learning to evaluate performance of classification algorithms.
+- Flexible to allow user to specify desired significance level and precision of point estimates
 - Provide options for dealing with missing data e.g., include in output or suppress.
 - Produce outputs with natural display of results useful in epidemiological and biomedical publications.
 
