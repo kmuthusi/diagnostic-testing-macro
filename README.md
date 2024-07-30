@@ -39,10 +39,9 @@ The user should specify input parameters described in the table below unless the
 |varmethod  |(optional) method for computing confidence intervals namely "Normal" (default) for normal distribution or "Wilson" (most desired) for Wilson score or "Exact" for exact binomial approximations|
 |print	|variable for displaying/suppressing the output table on the output window which takes the values (NO=suppress output, YES=show output)|
 
-
 A sample macro call program, `diag_test-analysis-file.sas`, is also provided as part of this repository.
 
-A manuscript describing more about the macro contents and usage is currently under development and will be made available online once published.
+A `manuscript` describing more about the macro contents and usage is currently under peer review and a pre-print article is available online at [Research Square](https://www.researchsquare.com/article/rs-3344191/v1)
 
 ## Public Domain
 This repository constitutes a work of the United States Government and is not
