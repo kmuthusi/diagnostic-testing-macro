@@ -44,7 +44,7 @@ A sample macro call program, `diag_test-analysis-file.sas`, is also provided as 
 A `manuscript` describing more about the macro contents and usage is currently under peer review and a pre-print article is available online at [Research Square](https://www.researchsquare.com/article/rs-3344191/v1)
 
 ## Using SAS onDemand for Academics
-Below representation demonstrates how to setup the files and run using free online SAS onDemand for Academics. 
+Below representation demonstrates how to setup the files and run using free online [SAS onDemand for Academics](https://welcome.oda.sas.com/). 
 ![image](https://github.com/user-attachments/assets/69f8d070-3f20-495f-95cf-5d9bb353efbf)
 ![image](https://github.com/user-attachments/assets/627548bb-03e4-4343-a747-13c81991086f)
 
