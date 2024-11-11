@@ -43,6 +43,10 @@ A sample macro call program, `diag_test-analysis-file.sas`, is also provided as 
 
 A `manuscript` describing more about the macro contents and usage is currently under peer review and a pre-print article is available online at [Research Square](https://www.researchsquare.com/article/rs-3344191/v1)
 
+## Using SAS onDemand for Academics
+![image](https://github.com/user-attachments/assets/1f17ab69-a4e9-484b-b969-7b6e1eb1b981)
+
+
 ## Public Domain
 This repository constitutes a work of the United States Government and is not
 subject to domestic copyright protection under 17 USC § 105. This repository is in
