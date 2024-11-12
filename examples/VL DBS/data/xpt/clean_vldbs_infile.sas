@@ -1,10 +1,10 @@
 
 /********************************************************
-** program: C:\Users\mwj6\OneDrive - CDC\+My_Documents\Muthusi\PhD\Diagnostic testing\SAS\data\xpt\clean_vldbs_infiles.sas  
+** program: /home/kmuthusi0/Diagnostic testing/SAS/data/xpt/clean_vldbs_infiles.sas  
 ** programmer: savasas  
 ** date: 17 Feb 2022 
 ** comments: SAS program to read and label:  
-**  C:\Users\mwj6\OneDrive - CDC\+My_Documents\Muthusi\PhD\Diagnostic testing\SAS\data\xpt\clean_.xpt 
+**  /home/kmuthusi0/Diagnostic testing/SAS/data/xpt/clean_.xpt 
 **           which contains data from a Stata dataset
 ********************************************************/
 
@@ -13,28 +13,28 @@ options nofmterr nocenter linesize=max;
 
  ** this version of _infile_report.do will be overwritten if all goes well. **; 
  data _null_;
-file "C:\Users\mwj6\OneDrive - CDC\+My_Documents\Muthusi\PhD\Diagnostic testing\SAS\data\xpt\clean_vldbs_infile_report.do"; 
+file "/home/kmuthusi0/Diagnostic testing/SAS/data/xpt/clean_vldbs_infile_report.do"; 
  put "capture program drop sas_rep"; 
  put "program define sas_rep, rclass"; 
  put "di as err "" SAS failed to create clean_vldbs "" "; 
- put "di as err "" Look at {view C:\Users\mwj6\OneDrive - CDC\+My_Documents\Muthusi\PhD\Diagnostic testing\SAS\data\xpt\clean_vldbs_infile.log:C:\Users\mwj6\OneDrive - CDC\+My_Documents\Muthusi\PhD\Diagnostic testing\SAS\data\xpt\clean_vldbs_infile.log} to see what error occurred. "" "; 
+ put "di as err "" Look at {view /home/kmuthusi0/Diagnostic testing/SAS/data/xpt/clean_vldbs_infile.log:/home/kmuthusi0/Diagnostic testing/SAS/data/xpt/clean_vldbs_infile.log} to see what error occurred. "" "; 
  put "local sas_rep_error= 1 "; 
  put "return local sas_rep_error ""`sas_rep_error\'"" "; 
  put "end"; 
 
-libname library v9 "C:\Users\mwj6\OneDrive - CDC\+My_Documents\Muthusi\PhD\Diagnostic testing\SAS\data\xpt\" ;  
+libname library v9 "/home/kmuthusi0/Diagnostic testing/SAS/data/xpt/" ;  
 
 options fmtsearch=(out.clean_vldbs);  
 
-libname out v9 "C:\Users\mwj6\OneDrive - CDC\+My_Documents\Muthusi\PhD\Diagnostic testing\SAS\data\xpt\"  ;  
+libname out v9 "/home/kmuthusi0/Diagnostic testing/SAS/data/xpt/"  ;  
 
-libname raw xport "C:\Users\mwj6\OneDrive - CDC\+My_Documents\Muthusi\PhD\Diagnostic testing\SAS\data\xpt\clean_.xpt";  
+libname raw xport "/home/kmuthusi0/Diagnostic testing/SAS/data/xpt/clean_.xpt";  
 
 
 options NoQuoteLenMax;
 data formats;
 length fmtname $32 start end 8 label $32000;
-infile "C:\Users\mwj6\OneDrive - CDC\+My_Documents\Muthusi\PhD\Diagnostic testing\SAS\data\xpt\clean_vldbs_formats.txt" lrecl=32075 truncover ; 
+infile "/home/kmuthusi0/Diagnostic testing/SAS/data/xpt/clean_vldbs_formats.txt" lrecl=32075 truncover ; 
 input fmtname 1-32 start 34-53 end 55-74 label 76-32000;
 run; 
 
@@ -685,9 +685,9 @@ run;
  %let lib_error=&syserr.; 
 
 
-proc printto print= "C:\Users\mwj6\OneDrive - CDC\+My_Documents\Muthusi\PhD\Diagnostic testing\SAS\data\xpt\clean_vldbs_SAScheck.lst" new; 
+proc printto print= "/home/kmuthusi0/Diagnostic testing/SAS/data/xpt/clean_vldbs_SAScheck.lst" new; 
 
- title "data= C:\Users\mwj6\OneDrive - CDC\+My_Documents\Muthusi\PhD\Diagnostic testing\SAS\data\xpt\clean_vldbs: Compare results with Stata output."; 
+ title "data= /home/kmuthusi0/Diagnostic testing/SAS/data/xpt/clean_vldbs: Compare results with Stata output."; 
 
  proc means    data= out.clean_vldbs; run;
 
@@ -696,3 +696,4 @@ proc printto print= "C:\Users\mwj6\OneDrive - CDC\+My_Documents\Muthusi\PhD\Diag
  proc print    data= out.clean_vldbs (obs=5); run; 
 
  proc printto; run; 
+ 
