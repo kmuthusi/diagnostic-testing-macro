@@ -13,11 +13,11 @@ proc datasets lib=work nolist kill; quit; run;
 /*proc printto log="&dir./output/logs/diag_test_log.log" new; run;*/
 
 * set output directory;
-%let outputdir=&dir./output\tables;
+%let outputdir=&dir./output/tables;
 libname vldbs "&dir./data";
 
 *load setup file;
-%include "&dir./codes\cad-setup.sas";
+%include "&dir./codes/cad-setup.sas";
 
 *load required macro;
 %include "&dir./macros/pr_curve.sas";
