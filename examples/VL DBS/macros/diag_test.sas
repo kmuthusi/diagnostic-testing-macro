@@ -265,8 +265,8 @@ option nomprint nosymbolgen nomlogic nodate nonumber;
 %* generate output table in MS Word and Excel using defined template;
 ods escapechar = "^";
 
-ods rtf file="&outputdir\&tablename..rtf" style=DIAG;
-ods tagsets.ExcelXP file="&outputdir\&tablename..xls" style=DIAG;
+ods rtf file="&outputdir/&tablename..rtf" style=DIAG;
+ods tagsets.ExcelXP file="&outputdir/&tablename..xls" style=DIAG;
 ods tagsets.ExcelXP options(sheet_label="&tablename" suppress_bylines="yes" embedded_titles="yes");
 
 title "&tabletitle" " (&surveyname study)";
@@ -301,7 +301,7 @@ ods rtf close;
 
 ods _all_ close;
 
-ods rtf file="&outputdir\roc_&tablename..rtf" startpage=yes;
+ods rtf file="&outputdir/roc_&tablename..rtf" startpage=yes;
 ods noproctitle;
 	title "Area under ROC curves for " "&tabletitle" " (&surveyname study)";
 		proc sgplot data=_roccurve_;
@@ -315,7 +315,7 @@ ods rtf close;
 ods _all_ close;
 
 *options nodate nonumber orientation=portrait;
-ods rtf file="&outputdir\auprc_&tablename..rtf" startpage=yes;
+ods rtf file="&outputdir/auprc_&tablename..rtf" startpage=yes;
 ods noproctitle;
 	title "Area under PR curves for " "&tabletitle" " (&surveyname study)";
 		proc sgplot data=_prcurve_;
