@@ -173,12 +173,20 @@
 			if &domain=&domainvalue;
 			&condition;
 
-			* replace missing values code with .;
+			%* replace missing values code with .;
 			array a(*) _numeric_;
 			do i=1 to dim(a);
 				if a(i) = &missvaluelabel. then a(i) =.;
 			end;
 			drop i;
+		run;
+
+		%* get truth variable label;
+		data _null_; 
+			set &data;
+			call symputx("truthvarlab", vlabel(&truthvar));
+			ci=(1-&alpha)*100;
+			call symput("nci",trim(left(ci)));
 		run;
 
     	data _TMP3_; 
@@ -266,14 +274,6 @@ footnote height=8pt j=l "(Dated: &sysdate)" j=c "{\b\ Page }{\field{\*\fldinst {
 
 options papersize = A4 orientation = portrait;
 
-%* get truth variable label;
-data _null_; 
-	set &data;
-	call symputx("truthvarlab", vlabel(&truthvar));
-	ci=(1-&alpha)*100;
-	call symput("nci",trim(left(ci)));
-run;
-
 %let truthvarlabel = &truthvarlab;
 
 %* keep once instance of testtype;
@@ -305,7 +305,7 @@ ods rtf file="&outputdir\roc_&tablename..rtf" startpage=yes;
 ods noproctitle;
 	title "Area under ROC curves for " "&tabletitle" " (&surveyname study)";
 		proc sgplot data=_roccurve_;
-			series x =_1mspec_ y = _sensit_ / group=ROC;
+			series x =_1mspec_ y = _sensit_ / group=ROC lineattrs = (thickness = 2 pattern = solid) ;
 			yaxis values=(0 to 1 by 0.2);
 			xaxis values=(0 to 1 by 0.2);
 		run;
@@ -319,7 +319,7 @@ ods rtf file="&outputdir\auprc_&tablename..rtf" startpage=yes;
 ods noproctitle;
 	title "Area under PR curves for " "&tabletitle" " (&surveyname study)";
 		proc sgplot data=_prcurve_;
-			series x = recall y = precision / group=auprc;   
+			series x = recall y = precision / group=auprc lineattrs = (thickness = 2 pattern = solid) ; 
 			yaxis values=(0 to 1 by 0.2); 
 			xaxis values=(0 to 1 by 0.2);
 		run;
@@ -345,48 +345,79 @@ quit;
 
 %* fit a logistic regression model;
 proc logistic data=&data;
-	model &truthvarcat (event="1")= &testvar / noint outroc=pr_performance;
+	model &truthvarcat (event="1")= &testvar / noint link=probit outroc=pr_performance;
 	output out = pr_estprob p= pred;
 run;
 
-%* Using the Trapezoidal integration rule;
+%* using Davis & Goadrich interpolation method;
+proc logistic data=&data;
+	model &truthvarcat (event="1")= / nofit outroc=pr_performance;
+	roc pred=&testvar;
+run;
+%prcurve()
+
 data _pr_;
 length test $50;
-set pr_performance;
-	precision = _POS_/(_POS_ + _FALPOS_);
-	recall = _POS_/(_POS_ + _FALNEG_);
-	F_stat = harmean(precision, recall);
+	set _pr(rename=(_sensitivity=recall _ppv=precision));
 	test = "&testtype";
 run;
-
-proc sort data=_pr_;
-	by recall;
+ 
+%* compute optional area under PR curve and store for display in plot;
+proc expand data=_pr_ out=_tmp_pr method=join;
+      convert precision=area/observed=(beginning,total) transformout=(sum);
+      id recall;
 run;
 
-%* calculate area under precision recall curve;
-ods output auprc=auprc;
-proc iml;
-	use _pr_;
-	read all var {recall} into sensitivity;
-	read all var {precision} into precision;
-	N = 2 : nrow(sensitivity);
-	tpr = sensitivity[N] - sensitivity[N-1];
-	prec = precision[N] + precision[N-1];
-	auprc = tpr`*prec/2;
-	print auprc;
+proc sql noprint;
+	select put(max(area),comma10.5) into :area from _tmp_pr;
+	create table auprc (Col1 num); 
+	insert into auprc values(&area);
+	select * from auprc;
 quit;
+
+%* get number of observations;
+data _null_;
+	if 0 then set _pr_ nobs=n;
+	call symputx('nobs',n);
+	stop;
+run;
+
+%global nsize;
+%let nsize=&nobs;
+
 
 %* prepare final output;
 data auprc;
 length test $50;
 set auprc (rename=(Col1=pr));
 	test = "&testtype";
-	auprc = trim(left(test))||' ('||trim(left(put(pr,comma10.3)))||')';
+
+%* 95% CI ;
+	if upcase(&varmethod) = WILSON then do; 
+		%* upper limit;    
+		pr_ucl=(pr + quantile('NORMAL', (1-&alpha/2))**2/(2*&nsize) + quantile('NORMAL', (1-&alpha/2))*sqrt((pr*(1-pr)/&nsize) + quantile('NORMAL', (1-&alpha/2))**2/(4*&nsize**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/&nsize); 
+
+		%* lower limit;    
+		pr_lcl=(pr + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*&nsize) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((pr*(1-pr)/&nsize) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*&nsize**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/&nsize); 
+	end;
+
+	else do;
+		%* pr se;
+		pr_se=sqrt(pr*(1-pr)/&nsize);
+
+		%* upper limit;    
+		pr_ucl=pr+(quantile('NORMAL', (1-&alpha/2))*pr_se); 
+
+		%* lower limit;    
+		pr_lcl=pr-(quantile('NORMAL', (1-&alpha/2))*pr_se); 
+	end;
+
+	auprc = trim(left(test))||': '||trim(left(put(pr,comma10.2)))||' ('||trim(left(put(pr_lcl,comma10.2)))|| '-'||trim(left(put(pr_ucl,comma10.2)))|| ')';
 proc sort; by test; run;
 
 data _pr_final;
 	merge _pr_ auprc;
-	label precision="Precision" recall="Recall" auprc="Area Under the PR Curve";
+	label precision="Precision" recall="Recall" auprc="Area under the PR curve (&nci % CI)";
 	by test; 
 run;
 
@@ -406,6 +437,7 @@ ods output ROCAssociation = ROCAssociation;
 proc logistic data= &data;
 	model &truthvarcat(event="1") = &testvar / outroc=roc_performance;
 	roc &testvar;
+	*roccontrast;
 run;
 
 %* calculate area under ROC curve;
@@ -421,14 +453,32 @@ data aucroc;
 length test $50;
 set ROCAssociation;
 	test = "&testtype";
-	ROC = trim(left(test))||' ('||trim(left(put(Area,comma10.3)))||')';
+
+	%* confidence interval ;
+	if upcase(&varmethod) = WILSON then do; 
+		%* upper limit;    
+		roc_ucl=(Area + quantile('NORMAL', (1-&alpha/2))**2/(2*&nsize) + quantile('NORMAL', (1-&alpha/2))*sqrt((Area*(1-Area)/&nsize) + quantile('NORMAL', (1-&alpha/2))**2/(4*&nsize**2))) / (1 + quantile('NORMAL', (1-&alpha/2))**2/&nsize); 
+
+		%* lower limit;    
+		roc_lcl=(Area + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*&nsize) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((Area*(1-Area)/&nsize) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*&nsize**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/&nsize); 
+	end;
+
+	else do;
+		%* upper limit;    
+		roc_ucl=UpperArea; 
+
+		%* lower limit;    
+		roc_lcl=LowerArea; 
+	end;
+
+	ROC = trim(left(test))||': '||trim(left(put(Area,comma10.2)))||' ('||trim(left(put(roc_lcl,comma10.2)))|| '-'||trim(left(put(roc_ucl,comma10.2)))|| ')';
 	where ROCModel = "Model";
 proc sort; by test; 
 run;
 
 data _roc_final;
 	merge _roc_ aucroc;
-	label ROC = "Area Under the ROC Curve";
+	label ROC = "Area under the ROC curve (&nci % CI)";
 	by test; 
 run;
 
@@ -511,7 +561,7 @@ data _tmp3_;
 
 			else if upcase(&varmethod) = EXACT then do;
 				* exact binomial confidence limits ***equn 10.7 of feller;
-				lpct=(1.0-95.0/100)/2;    
+				lpct=(&alpha)/2;    
 				upct=1-lpct;  
 
 				* upper limit;    
@@ -528,10 +578,10 @@ data _tmp3_;
 				sens_se=sqrt(sens*(1-sens)/n);
 
 				* upper limit;    
-				sens_ucl=sens+(1.96*sens_se); 
+				sens_ucl=sens+(quantile('NORMAL', (1-&alpha/2))*sens_se); 
 
 				* lower limit;    
-				sens_lcl=sens-(1.96*sens_se); 
+				sens_lcl=sens-(quantile('NORMAL', (1-&alpha/2))*sens_se); 
 			end;
 
 			* 95 CI;
@@ -558,7 +608,7 @@ data _tmp3_;
 
 			else if upcase(&varmethod) = EXACT then do; 
 				*** exact binomial confidence limits ***equn 10.7 of feller*;
-				lpct=(1.0-95.0/100)/2;    
+				lpct=(&alpha)/2;    
 				upct=1-lpct;    
 
 				* upper limit;
@@ -575,10 +625,10 @@ data _tmp3_;
 				spec_se=sqrt(spec*(1-spec)/n);
 
 				* upper limit;    
-				spec_ucl=spec+(1.96*spec_se); 
+				spec_ucl=spec+(quantile('NORMAL', (1-&alpha/2))*spec_se); 
 
 				* lower limit;    
-				spec_lcl=spec-(1.96*spec_se); 
+				spec_lcl=spec-(quantile('NORMAL', (1-&alpha/2))*spec_se); 
 			end;
 
 			* 95 CI;
@@ -604,7 +654,7 @@ data _tmp3_;
 			end;
 
 			else if upcase(&varmethod) = EXACT then do;
-				lpct=(1.0-95.0/100)/2;    
+				lpct=(&alpha)/2;    
 				upct=1-lpct;   
 
 				*** exact binomial confidence limits ***equn 10.7 of feller*;
@@ -622,10 +672,10 @@ data _tmp3_;
 				ppv_se=sqrt(ppv*(1-ppv)/n);
 
 				* upper limit;    
-				ppv_ucl=ppv+(1.96*ppv_se); 
+				ppv_ucl=ppv+(quantile('NORMAL', (1-&alpha/2))*ppv_se); 
 
 				* lower limit;    
-				ppv_lcl=ppv-(1.96*ppv_se); 
+				ppv_lcl=ppv-(quantile('NORMAL', (1-&alpha/2))*ppv_se); 
 			end;
 
 			* 95 CI;
@@ -655,15 +705,15 @@ data _tmp3_;
 				npv_se=sqrt(npv*(1-npv)/n);
 
 				* upper limit;    
-				npv_ucl=npv+(1.96*npv_se); 
+				npv_ucl=npv+(quantile('NORMAL', (1-&alpha/2))*npv_se); 
 
 				* lower limit;    
-				npv_lcl=npv-(1.96*npv_se); 
+				npv_lcl=npv-(quantile('NORMAL', (1-&alpha/2))*npv_se); 
 			end;
 
 			else if upcase(&varmethod) = EXACT then do;
 				*** exact binomial confidence limits ***equn 10.7 of feller*;
-				lpct=(1.0-95.0/100)/2;
+				lpct=(&alpha)/2;
 				upct=1-lpct;   
  
 				* upper limit;
@@ -700,7 +750,7 @@ data _tmp3_;
 
 			else if upcase(&varmethod) = EXACT then do;
 				*** exact binomial confidence limits ***equn 10.7 of feller*;
-				lpct=(1.0-95.0/100)/2;
+				lpct=(&alpha)/2;
 				upct=1-lpct; 
  
 				* lower limit;
@@ -717,10 +767,10 @@ data _tmp3_;
 				umiss_se=sqrt(umiss*(1-umiss)/n);
 
 				* upper limit;    
-				umiss_ucl=umiss+(1.96*umiss_se); 
+				umiss_ucl=umiss+(quantile('NORMAL', (1-&alpha/2))*umiss_se); 
 
 				* lower limit;    
-				umiss_lcl=umiss-(1.96*umiss_se); 
+				umiss_lcl=umiss-(quantile('NORMAL', (1-&alpha/2))*umiss_se); 
 			end;
 
 
@@ -749,7 +799,7 @@ data _tmp3_;
 
 			else if upcase(&varmethod) = EXACT then do;
 				*** exact binomial confidence limits ***equn 10.7 of feller*;
-				lpct=(1.0-95.0/100)/2;    
+				lpct=(&alpha)/2;    
 				upct=1-lpct;  
 
 				*lower limit;    
@@ -765,10 +815,10 @@ data _tmp3_;
 				dmiss_se=sqrt(dmiss*(1-dmiss)/n);
 
 				* upper limit;    
-				dmiss_ucl=dmiss+(1.96*dmiss_se); 
+				dmiss_ucl=dmiss+(quantile('NORMAL', (1-&alpha/2))*dmiss_se); 
 
 				* lower limit;    
-				dmiss_lcl=dmiss-(1.96*dmiss_se); 
+				dmiss_lcl=dmiss-(quantile('NORMAL', (1-&alpha/2))*dmiss_se); 
 			end;
 
 			* 95 CI;
@@ -796,7 +846,7 @@ data _tmp3_;
 
 			else if upcase(&varmethod) = EXACT then do;
 				*** exact binomial confidence limits ***equn 10.7 of feller*;
-				lpct=(1.0-95.0/100)/2;    
+				lpct=(&alpha)/2;    
 				upct=1-lpct;  
 
 				*lower limit;    
@@ -813,10 +863,10 @@ data _tmp3_;
 				fo_rate_se=sqrt(fo_rate*(1-fo_rate)/n2);
 
 				* upper limit;    
-				fo_rate_ucl=fo_rate+(1.96*fo_rate_se); 
+				fo_rate_ucl=fo_rate+(quantile('NORMAL', (1-&alpha/2))*fo_rate_se); 
 
 				* lower limit;    
-				fo_rate_lcl=fo_rate-(1.96*fo_rate_se); 
+				fo_rate_lcl=fo_rate-(quantile('NORMAL', (1-&alpha/2))*fo_rate_se); 
 			end;
 
 			* 95 CI;
@@ -843,7 +893,7 @@ data _tmp3_;
 
 			else if upcase(&varmethod) = EXACT then do;
 				*** exact binomial confidence limits ***equn 10.7 of feller*;
-				lpct=(1.0-95.0/100)/2;    
+				lpct=(&alpha)/2;    
 				upct=1-lpct;  
 
 				*lower limit;    
@@ -860,10 +910,10 @@ data _tmp3_;
 				fd_rate_se=sqrt(fd_rate*(1-fd_rate)/n2);
 
 				* upper limit;    
-				fd_rate_ucl=fd_rate+(1.96*fd_rate_se); 
+				fd_rate_ucl=fd_rate+(quantile('NORMAL', (1-&alpha/2))*fd_rate_se); 
 
 				* lower limit;    
-				fd_rate_lcl=fd_rate-(1.96*fd_rate_se); 
+				fd_rate_lcl=fd_rate-(quantile('NORMAL', (1-&alpha/2))*fd_rate_se); 
 			end;
 
 			* 95% CI;
@@ -1011,10 +1061,10 @@ data _tmp3_;
 				acc_se=sqrt(acc*(1-acc)/n);
 
 				* upper limit;    
-				acc_ucl=acc+(1.96*acc_se); 
+				acc_ucl=acc+(quantile('NORMAL', (1-&alpha/2))*acc_se); 
 
 				* lower limit;    
-				acc_lcl=acc-(1.96*acc_se); 
+				acc_lcl=acc-(quantile('NORMAL', (1-&alpha/2))*acc_se); 
 			end;
 
 			* 95 CI;
@@ -1038,29 +1088,15 @@ data _tmp3_;
 				prev_lcl=(prev + (-quantile('NORMAL', (1-&alpha/2)))**2/(2*n) + (-quantile('NORMAL', (1-&alpha/2)))*sqrt((prev*(1-prev)/n) + (-quantile('NORMAL', (1-&alpha/2)))**2/(4*n**2))) / (1 + (-quantile('NORMAL', (1-&alpha/2)))**2/n); 
 			end;
 
-			else if upcase(&varmethod) = EXACT then do;
-				*** exact binomial confidence limits ***equn 10.7 of feller*;
-				lpct=(1.0-95.0/100)/2;    
-				upct=1-lpct;
- 
-				* upper limit;
-				if (a+c)<(a+b+c+d) then prev_ucl=1-betainv(lpct,(a+c),(b+d+1)); 
-				else prev_ucl=1;
-
-				* lower limit;
-				if d>0 then prev_lcl=1-betainv(upct,(a+c+1),(b+d));     
-				else prev_lcl=0;
-			end;
-
 			else do; 
 				* standard error;
 				prev_se=sqrt(prev*(1-prev)/n);
 
 				* upper limit;    
-				prev_ucl=prev+(1.96*prev_se); 
+				prev_ucl=prev+(quantile('NORMAL', (1-&alpha/2))*prev_se); 
 
 				* lower limit;    
-				prev_lcl=prev-(1.96*prev_se); 
+				prev_lcl=prev-(quantile('NORMAL', (1-&alpha/2))*prev_se); 
 			end;
 
 			* 95 CI;
@@ -1204,7 +1240,7 @@ data _tmp3_;
 			cnt2="< &truthcutvalue" 
 			test_r="Test result" 
 			tot="Total"  
-			stat="(95 CI)" 
+			stat="(&nci % CI)" 
 			testtype="Test type";   
  run;
 %mend dtest;
