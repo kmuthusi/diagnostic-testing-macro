@@ -8,21 +8,21 @@ proc datasets lib=work nolist kill; quit; run;
 %put START TIME: %sysfunc(datetime(),datetime14.);
 
 * set working directory;
-%let dir=C:\Users\mwj6\OneDrive - CDC\+My_Documents\Muthusi\PhD\Diagnostic testing\SAS;
+%let dir=/home/kmuthusi0/Diagnostic testing/SAS;
 
-proc printto log="&dir.\output\logs\diag_test_log.log" new; run;
+proc printto log="&dir./output/logs/diag_test_log.log" new; run;
 
 * set output directory;
-%let outputdir=&dir.\output\tables;
-libname vldbs "&dir.\data";
+%let outputdir=&dir./output/tables;
+libname vldbs "&dir./data";
 
 *load setup file;
-%include "&dir.\setup\setup.sas";
+%include "&dir./setup/setup.sas";
 
 *load required macro;
-%include "&dir.\macros\pr_curve.sas";
+%include "&dir./macros/pr_curve.sas";
 
-%include "&dir.\macros\diag_test.sas";
+%include "&dir./macros/diag_test.sas";
 
 * data steps...;
 data vl_dbs;
