@@ -45,7 +45,9 @@ A `manuscript` describing more about the macro contents and usage is currently u
 
 ## Using SAS onDemand for Academics
 Below representation demonstrates how to setup the files and run using [SAS® OnDemand for Academics](https://welcome.oda.sas.com/). 
+
 ![image](https://github.com/user-attachments/assets/69f8d070-3f20-495f-95cf-5d9bb353efbf)
+
 ![image](https://github.com/user-attachments/assets/627548bb-03e4-4343-a747-13c81991086f)
 
 Specifically,
