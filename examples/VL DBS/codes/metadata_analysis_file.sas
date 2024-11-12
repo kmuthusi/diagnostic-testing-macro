@@ -4,13 +4,13 @@ dm 'odsresults; clear; log; clear; out; clear';
 proc datasets lib=work nolist kill; quit; run;
 
 * set working directory;
-%let dir=C:\Users\mwj6\OneDrive - CDC\+My_Documents\Muthusi\PhD\Diagnostic testing\SAS;
+%let dir=/home/kmuthusi0/Diagnostic testing/SAS;
 
 * set output directory;
-%let outdir=&dir.\output\tables;
+%let outdir=&dir./output/tables;
 
 * print log to file;
-/*proc printto log="&dir.\output\logs\eid_dr_data_metadata_log_file.txt" new; run;*/
+/*proc printto log="&dir./output/logs/eid_dr_data_metadata_log_file.txt" new; run;*/
 
 * track program run time;
 * program start time;
@@ -18,10 +18,10 @@ proc datasets lib=work nolist kill; quit; run;
 %put START TIME: %sysfunc(datetime(),datetime14.);
 
 * load data setup file;
-%include "&dir.\setup\setup.sas";
+%include "&dir./setup/setup.sas";
 
 * load required macros;
-%include "&dir.\macros\metadata.sas";
+%include "&dir./macros/metadata.sas";
 
 * data steps ...;
 data vl_dbs;
