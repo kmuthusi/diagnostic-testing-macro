@@ -8,13 +8,13 @@ proc datasets lib=work nolist kill; quit; run;
 %put START TIME: %sysfunc(datetime(),datetime14.);
 
 * set working directory;
-%let dir=/home/kmuthusi0/CAD/SAS;
+%let dir=/home/kmuthusi0/CAD/;
 
 /*proc printto log="&dir./output/logs/diag_test_log.log" new; run;*/
 
 * set output directory;
-%let outputdir=&dir./output/tables;
-libname vldbs "&dir./data";
+%let outputdir=&dir./output/tables/;
+libname cad "&dir./data";
 
 *load setup file;
 %include "&dir./codes/cad-setup.sas";
@@ -99,4 +99,3 @@ option mlogic mprint symbolgen;
 
 * reset print to log;
 proc printto; run;
-
